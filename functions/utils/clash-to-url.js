@@ -123,12 +123,19 @@ export function convertClashProxyToUrl(proxy) {
         if (type === 'vless') {
             const uuid = proxy.uuid || proxy.UUID;
             if (!uuid) return null;
-            const params = ['encryption=none'];
+            const params = [`encryption=${encodeURIComponent(proxy.encryption || 'none')}`];
             if (proxy.network) params.push(`type=${proxy.network}`);
             const wsOpts = proxy.wsOpts || proxy['ws-opts'];
             if (wsOpts) {
                 if (wsOpts.path) params.push(`path=${encodeURIComponent(wsOpts.path)}`);
                 if (wsOpts.headers?.Host) params.push(`host=${encodeURIComponent(wsOpts.headers.Host)}`);
+            }
+            const xhttpOpts = proxy.xhttpOpts || proxy['xhttp-opts'];
+            if (xhttpOpts) {
+                if (xhttpOpts.path) params.push(`path=${encodeURIComponent(xhttpOpts.path)}`);
+                const xhttpHost = xhttpOpts.host || xhttpOpts.headers?.Host;
+                if (xhttpHost) params.push(`host=${encodeURIComponent(xhttpHost)}`);
+                if (xhttpOpts.mode) params.push(`mode=${encodeURIComponent(xhttpOpts.mode)}`);
             }
             const grpcOpts = proxy.grpcOpts || proxy['grpc-opts'];
             if (grpcOpts) {
@@ -146,6 +153,7 @@ export function convertClashProxyToUrl(proxy) {
                 if (realityOpts['public-key']) params.push(`pbk=${encodeURIComponent(realityOpts['public-key'])}`);
                 if (realityOpts['short-id']) params.push(`sid=${encodeURIComponent(realityOpts['short-id'])}`);
                 if (realityOpts['spider-x']) params.push(`spx=${encodeURIComponent(realityOpts['spider-x'])}`);
+                if (realityOpts['support-x25519mlkem768']) params.push('sxm=1');
             } else if (proxy.tls) {
                 params.push('security=tls');
             }

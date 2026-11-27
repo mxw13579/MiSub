@@ -74,6 +74,21 @@ export function convertVlessToUrl(proxy) {
                 }
                 break;
 
+            case 'xhttp':
+                if (proxy['xhttp-opts']) {
+                    if (proxy['xhttp-opts'].path) {
+                        params.set('path', proxy['xhttp-opts'].path);
+                    }
+                    const xhttpHost = proxy['xhttp-opts'].host || proxy['xhttp-opts'].headers?.Host;
+                    if (xhttpHost) {
+                        params.set('host', xhttpHost);
+                    }
+                    if (proxy['xhttp-opts'].mode) {
+                        params.set('mode', proxy['xhttp-opts'].mode);
+                    }
+                }
+                break;
+
             case 'splithttp':
                 if (proxy['splithttp-opts']) {
                     if (proxy['splithttp-opts'].path) {
@@ -123,6 +138,9 @@ export function convertVlessToUrl(proxy) {
                 }
                 if (proxy['reality-opts']['spider-x']) {
                     params.set('spx', proxy['reality-opts']['spider-x']);
+                }
+                if (proxy['reality-opts']['support-x25519mlkem768']) {
+                    params.set('sxm', '1');
                 }
             }
             // Reality SNI

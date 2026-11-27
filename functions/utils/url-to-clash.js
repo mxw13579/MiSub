@@ -115,6 +115,12 @@ function parseVlessUrl(url) {
             uuid
         };
 
+        // VLESS 内层加密 (例如 mlkem768x25519plus...)
+        const encryption = params.get('encryption');
+        if (encryption && encryption !== 'none') {
+            proxy.encryption = encryption;
+        }
+
         // 网络类型
         const network = params.get('type') || 'tcp';
         if (network !== 'tcp') {
@@ -138,7 +144,7 @@ function parseVlessUrl(url) {
             const xhttpOpts = {};
             const path = params.get('xhttp-path') || params.get('path');
             const host = params.get('xhttp-host') || params.get('host') || params.get('sni');
-            if (path) xhttpOpts.path = path;
+            if (path) xhttpOpts.path = path.startsWith('/') ? path : `/${path}`;
             if (host) {
                 xhttpOpts.host = host;
                 xhttpOpts.headers = { Host: host };
@@ -182,6 +188,19 @@ function parseVlessUrl(url) {
             if (params.get('pbk')) realityOpts['public-key'] = params.get('pbk');
             if (params.get('sid')) realityOpts['short-id'] = params.get('sid');
             if (params.get('spx')) realityOpts['spider-x'] = params.get('spx');
+            const sxm =
+                params.get('support-x25519mlkem768') ||
+                params.get('support_x25519mlkem768') ||
+                params.get('sxm');
+            if (sxm === '0' || sxm === 'false') {
+                // 显式禁用外层后量子密钥交换
+            } else if (
+                sxm === '1' ||
+                sxm === 'true' ||
+                (sxm === null && encryption && encryption.toLowerCase().includes('mlkem768'))
+            ) {
+                realityOpts['support-x25519mlkem768'] = true;
+            }
             if (Object.keys(realityOpts).length > 0) {
                 proxy['reality-opts'] = realityOpts;
             }
