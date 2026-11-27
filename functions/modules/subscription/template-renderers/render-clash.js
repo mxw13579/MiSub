@@ -108,20 +108,35 @@ function getRuleProviderBehavior(providerUrl) {
     return 'classical';
 }
 
-function mapRule(rule, ruleProviderMap) {
+function hasNoResolve(rule) {
+    return Array.isArray(rule.extras) && rule.extras.some(extra => String(extra).trim().toLowerCase() === 'no-resolve');
+}
+
+function mapRule(rule, ruleProviderMap, ruleProviders = {}) {
     const type = String(rule.type || '').toUpperCase();
     if (!type) return null;
     if (type === 'MATCH' || type === 'FINAL') return `MATCH,${rule.policy}`;
-    if (type === 'GEOIP') return `GEOIP,${rule.value || 'CN'},${rule.policy}`;
+    const noResolveSuffix = hasNoResolve(rule) ? ',no-resolve' : '';
+    if (type === 'GEOIP') return `GEOIP,${rule.value || 'CN'},${rule.policy}${noResolveSuffix || ',no-resolve'}`;
     if (type === 'RULE-SET') {
         const providerName = ruleProviderMap.get(rule.value);
-        return `RULE-SET,${providerName || rule.value},${rule.policy}`;
+        const resolvedName = providerName || rule.value;
+        const isIpCidrProvider = ruleProviders[resolvedName]?.behavior === 'ipcidr';
+        const suffix = noResolveSuffix || (isIpCidrProvider ? ',no-resolve' : '');
+        return `RULE-SET,${resolvedName},${rule.policy}${suffix}`;
     }
-    return `${type},${rule.value},${rule.policy}`;
+    if (type === 'IP-CIDR' || type === 'IP-CIDR6') {
+        return `${type},${rule.value},${rule.policy}${noResolveSuffix || ',no-resolve'}`;
+    }
+    return `${type},${rule.value},${rule.policy}${noResolveSuffix}`;
 }
 
 export function renderClashFromTemplateModel(model) {
     const normalizedModel = normalizeUnifiedTemplateModel(model);
+
+    const primaryProxyGroup =
+        normalizedModel.groups.find(g => /节点选择|Proxy|Select/i.test(g.name))?.name ||
+        normalizedModel.groups.find(g => mapGroupType(g.type) === 'select')?.name;
 
     const ruleProviders = {};
     const ruleProviderMap = new Map();
@@ -154,6 +169,7 @@ export function renderClashFromTemplateModel(model) {
             url: providerUrl,
             path: `./ruleset/${providerName}.${usesTextList ? 'list' : 'yaml'}`,
             interval: 86400,
+            ...(primaryProxyGroup ? { proxy: primaryProxyGroup } : {}),
             ...(usesTextList ? { format: 'text' } : {})
         };
     });
@@ -163,14 +179,69 @@ export function renderClashFromTemplateModel(model) {
         'allow-lan': true,
         'mode': 'rule',
         'log-level': 'info',
+        'ipv6': true,
+        'unified-delay': true,
+        'tcp-concurrent': true,
+        'find-process-mode': 'strict',
+        'global-client-fingerprint': 'chrome',
         'external-controller': ':9090',
+        'sniffer': {
+            'enable': true,
+            'parse-pure-ip': true,
+            'force-dns-mapping': true,
+            'override-destination': false,
+            'sniff': {
+                'HTTP': {
+                    'ports': [80, '8080-8880'],
+                    'override-destination': true
+                },
+                'TLS': {
+                    'ports': [443, 8443]
+                },
+                'QUIC': {
+                    'ports': [443, 8443]
+                }
+            },
+            'skip-domain': [
+                'Mijia Cloud',
+                '+.push.apple.com',
+                '+.oray.com',
+                '+.oray.net'
+            ]
+        },
         'dns': {
             'enable': true,
+            'ipv6': false,
             'listen': '0.0.0.0:1053',
-            'default-nameserver': ['223.5.5.5', '1.1.1.1'],
+            'default-nameserver': ['223.5.5.5', '119.29.29.29'],
+            'proxy-server-nameserver': [
+                'https://dns.alidns.com/dns-query',
+                'https://doh.pub/dns-query'
+            ],
             'enhanced-mode': 'fake-ip',
             'fake-ip-range': '198.18.0.1/16',
-            'fake-ip-filter': ['*.lan', '*.localhost'],
+            'fake-ip-filter': [
+                '*.lan',
+                '*.local',
+                '*.localhost',
+                '+.msftconnecttest.com',
+                '+.msftncsi.com',
+                'localhost.ptlogin2.qq.com',
+                'localhost.sec.qq.com',
+                '+.oray.com',
+                '+.oray.net',
+                '+.srv.nintendo.net',
+                '+.stun.playstation.net',
+                'xbox.*.microsoft.com',
+                '+.xboxlive.com',
+                '+.battlenet.com.cn',
+                'stun.*.*',
+                'stun.*.*.*',
+                'time.*.com',
+                'time.*.gov',
+                'time.*.apple.com',
+                'ntp.*.com'
+            ],
             'nameserver': [
                 'https://dns.alidns.com/dns-query',
                 'https://doh.pub/dns-query'
@@ -183,20 +254,23 @@ export function renderClashFromTemplateModel(model) {
                 (Array.isArray(group.filters) && group.filters.length > 0)
             )
             .map(group => {
+                const mappedType = mapGroupType(group.type);
+                const isAutoGroup = ['url-test', 'fallback', 'load-balance'].includes(mappedType);
                 return {
                     name: group.name,
-                    type: mapGroupType(group.type),
+                    type: mappedType,
                     proxies: filterAutoSelectMembers(group),
                     filter: Array.isArray(group.filters) && group.filters.length > 0 ? group.filters.join('|') : undefined,
+                    ...(isAutoGroup ? { lazy: true } : {}),
                     ...group.options
                 };
             }),
         'rule-providers': Object.keys(ruleProviders).length > 0 ? ruleProviders : undefined,
         'rules': normalizedModel.rules.map(rule => {
             if (String(rule.type || '').toUpperCase() !== 'RULE-SET' || !rule.value) {
-                return mapRule(rule, ruleProviderMap);
+                return mapRule(rule, ruleProviderMap, ruleProviders);
             }
-            return mapRule({ ...rule, value: toClashRuleProviderUrl(rule.value) }, ruleProviderMap);
+            return mapRule({ ...rule, value: toClashRuleProviderUrl(rule.value) }, ruleProviderMap, ruleProviders);
         }).filter(Boolean),
         'profile': {
             'store-selected': true,
