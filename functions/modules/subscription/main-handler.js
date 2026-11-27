@@ -20,6 +20,7 @@ import { shouldApplyExternalTemplateForTarget } from './template-compatibility.j
 import { renderClashFromIniTemplate, renderLoonFromIniTemplate, renderQuanxFromIniTemplate, renderSingboxFromIniTemplate, renderSurgeFromIniTemplate } from './template-pipeline.js';
 import { getBuiltinTemplate } from './builtin-template-registry.js';
 import { assertPublicNetworkUrl } from '../security-utils.js';
+import { filterQuarantinedNodeLines } from '../node-health-handler.js';
 
 function maskSensitiveLogValue(value) {
     const text = String(value ?? '');
@@ -729,7 +730,7 @@ export async function handleMisubRequest(context) {
         return freshNodes;
     };
 
-    const { combinedNodeList, cacheHeaders } = await resolveNodeListWithCache({
+    const { combinedNodeList: rawCombinedNodeList, cacheHeaders } = await resolveNodeListWithCache({
         storageAdapter,
         cacheKey,
         forceRefresh,
@@ -737,6 +738,13 @@ export async function handleMisubRequest(context) {
         context,
         targetMisubsCount: targetMisubs.length
     });
+
+    const combinedNodeList = await filterQuarantinedNodeLines(
+        rawCombinedNodeList,
+        storageAdapter,
+        config,
+        url.searchParams
+    );
 
     console.log(`[MiSub Nodes] Count/Length: ${combinedNodeList ? combinedNodeList.length : 0}`);
 

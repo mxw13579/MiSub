@@ -8,6 +8,7 @@ export const KV_KEY_SUBS = 'misub_subscriptions_v1';
 export const KV_KEY_PROFILES = 'misub_profiles_v1';
 export const KV_KEY_GUESTBOOK = 'misub_guestbook_v1';
 export const KV_KEY_SETTINGS = 'worker_settings_v1';
+export const KV_KEY_NODE_HEALTH = 'misub_node_health_v1';
 
 // Auth
 export const COOKIE_NAME = 'auth_session';
@@ -49,6 +50,24 @@ export const DEFAULT_SETTINGS = {
     },
     defaultOperators: [], // 新版操作符链式处理 (New Unified Pipeline)
     regionOverrides: [], // 自定义节点地区覆盖规则：{ pattern, region, flags }
+    nodeStability: {
+        enabled: true,
+        enableGroupAutoFastest: true,
+        defaultMaxLatencyMs: 800,
+        failStrikeThreshold: 3,
+        recoveryCooldownHours: 24,
+        probeToken: '',
+        regionLatencyLimits: [
+            { region: '香港', maxLatencyMs: 250 },
+            { region: '台湾', maxLatencyMs: 300 },
+            { region: '日本', maxLatencyMs: 350 },
+            { region: '新加坡', maxLatencyMs: 400 },
+            { region: '韩国', maxLatencyMs: 350 },
+            { region: '美国', maxLatencyMs: 700 },
+            { region: '德国', maxLatencyMs: 600 },
+            { region: '英国', maxLatencyMs: 600 }
+        ]
+    },
     // @deprecated 使用 defaultOperators 代替
     defaultNodeTransform: {
         enabled: false,

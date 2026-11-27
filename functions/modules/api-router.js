@@ -52,6 +52,11 @@ import { normalizeSubconverterBackend } from './subscription/main-handler.js';
 import { maybeRunScheduledTasks } from './scheduled-task-runner.js';
 import { handleExternalNodesCallbackRequest } from '../services/external-nodes-callback-service.js';
 import { handleExternalApiRequest } from './external-api-router.js';
+import {
+    handleNodeHealthReport,
+    handleNodeHealthStatus,
+    handleNodeHealthReset
+} from './node-health-handler.js';
 
 // 常量定义
 const OLD_KV_KEY = 'misub_data_v1';
@@ -72,6 +77,10 @@ export async function handleApiRequest(request, env, context = null) {
 
     if (path === '/external-nodes-callback') {
         return handleExternalNodesCallbackRequest(request, env);
+    }
+
+    if (path === '/node-health/report') {
+        return await handleNodeHealthReport(request, env);
     }
 
     if (path.startsWith('/ext/v1')) {
@@ -399,6 +408,12 @@ export async function handleApiRequest(request, env, context = null) {
 
         case '/nodes/clean':
             return await handleCleanNodesRequest(request, env);
+
+        case '/node-health/status':
+            return await handleNodeHealthStatus(request, env);
+
+        case '/node-health/reset':
+            return await handleNodeHealthReset(request, env);
 
         case '/fetch_external_url':
             return await handleExternalFetchRequest(request, env);

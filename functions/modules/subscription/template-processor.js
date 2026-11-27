@@ -159,6 +159,28 @@ function extractSourcePrefixFromProxyName(name = '') {
     return prefix;
 }
 
+function buildHiddenAutoHelperGroup(shortLabel, rawMembers, enableAutoFastest) {
+    if (!enableAutoFastest) return null;
+    const realMembers = (rawMembers || []).filter(
+        name => !isInfoAnnouncementNode(name) && !/[iI][pP][vV]6/.test(name)
+    );
+    if (realMembers.length < 2) return null;
+
+    return {
+        name: `⚡ ${shortLabel}-自动最快`,
+        type: 'url-test',
+        members: realMembers,
+        filters: [],
+        options: {
+            url: 'https://www.gstatic.com/generate_204',
+            interval: 120,
+            tolerance: 40,
+            hidden: true,
+            'max-failed-times': 3
+        }
+    };
+}
+
 function injectDynamicSourceAndRegionSelectGroups(model) {
     const hasSourcePlaceholder = model.groups.some(
         g => Array.isArray(g.members) && g.members.includes('<%sourceStrategyChain%>')
@@ -167,8 +189,12 @@ function injectDynamicSourceAndRegionSelectGroups(model) {
         g => Array.isArray(g.members) && g.members.includes('<%regionSelectChain%>')
     );
 
+    const isClashTarget = String(model.meta?.target || 'clash').toLowerCase() === 'clash';
+    const enableAutoFastest = isClashTarget && model.settings?.enableGroupAutoFastest !== false;
+
     const injectedSourceGroupNames = [];
     const injectedRegionSelectGroupNames = [];
+    const hiddenHelperGroups = [];
 
     if (hasSourcePlaceholder && model.proxies.length > 0) {
         const sourceMap = new Map();
@@ -190,11 +216,15 @@ function injectDynamicSourceAndRegionSelectGroups(model) {
 
         sortedSources.forEach(src => {
             const groupName = src === '自建' ? '🏠 自建' : `📦 ${src}`;
+            const rawMembers = sourceMap.get(src);
+            const helper = buildHiddenAutoHelperGroup(src, rawMembers, enableAutoFastest);
+            if (helper) hiddenHelperGroups.push(helper);
+
             injectedSourceGroupNames.push(groupName);
             model.groups.push({
                 name: groupName,
                 type: 'select',
-                members: sourceMap.get(src),
+                members: helper ? [helper.name, ...rawMembers] : rawMembers,
                 filters: [],
                 options: {}
             });
@@ -225,15 +255,23 @@ function injectDynamicSourceAndRegionSelectGroups(model) {
                 .replace(/节点$/, '')
                 .replace('狮城', '新加坡')
                 .trim();
+            const shortRegion = cleanLabel.replace(/^[^\u4e00-\u9fa5A-Za-z0-9]+/, '').trim() || cleanLabel;
+            const helper = buildHiddenAutoHelperGroup(shortRegion, region.tags, enableAutoFastest);
+            if (helper) hiddenHelperGroups.push(helper);
+
             injectedRegionSelectGroupNames.push(cleanLabel);
             model.groups.push({
                 name: cleanLabel,
                 type: 'select',
-                members: region.tags,
+                members: helper ? [helper.name, ...region.tags] : region.tags,
                 filters: [],
                 options: {}
             });
         });
+    }
+
+    if (hiddenHelperGroups.length > 0) {
+        model.groups.push(...hiddenHelperGroups);
     }
 
     return { injectedSourceGroupNames, injectedRegionSelectGroupNames };

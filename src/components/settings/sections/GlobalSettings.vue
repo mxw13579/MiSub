@@ -1,6 +1,7 @@
 <script setup>
 import { watch } from 'vue';
 import OperatorChain from '../../features/Operators/OperatorChain.vue';
+import NodeStabilityCard from '../NodeStabilityCard.vue';
 import Input from '../../ui/Input.vue';
 import SectionHeader from '../SectionHeader.vue';
 import { useI18n } from '../../../i18n/index.js';
@@ -130,6 +131,9 @@ watch(() => props.settings, ensureDefaults, { immediate: true });
         </div>
       </div>
     </div>
+
+    <!-- Node Stability & Regional Latency Governance -->
+    <NodeStabilityCard :settings="settings" />
 
     <!-- Region Overrides -->
     <div class="rounded-xl border border-gray-100 bg-white/90 p-6 shadow-sm dark:border-white/10 dark:bg-gray-900/70">

@@ -75,6 +75,24 @@ prependGroupName: false
     },
     nodeTransformPresets: [],
     regionOverrides: [],
+    nodeStability: {
+        enabled: true,
+        enableGroupAutoFastest: true,
+        defaultMaxLatencyMs: 800,
+        failStrikeThreshold: 3,
+        recoveryCooldownHours: 24,
+        probeToken: '',
+        regionLatencyLimits: [
+            { region: '香港', maxLatencyMs: 250 },
+            { region: '台湾', maxLatencyMs: 300 },
+            { region: '日本', maxLatencyMs: 350 },
+            { region: '新加坡', maxLatencyMs: 400 },
+            { region: '韩国', maxLatencyMs: 350 },
+            { region: '美国', maxLatencyMs: 700 },
+            { region: '德国', maxLatencyMs: 600 },
+            { region: '英国', maxLatencyMs: 600 }
+        ]
+    },
     // 公告设置
     announcement: {
         enabled: true,            // 是否启用公告
