@@ -136,11 +136,107 @@ function dedupeGroupsByName(model) {
     model.groups = mergedGroups;
 }
 
+const REGION_PRIORITY_ORDER = [
+    '香港', '台湾', '日本', '新加坡', '美国', '韩国', '英国', '德国', '法国', '加拿大', '澳大利亚', '荷兰', '俄罗斯', '印度', '土耳其'
+];
+
+function extractSourcePrefixFromProxyName(name = '') {
+    const withoutEmoji = String(name || '')
+        .replace(/^(?:[\u{1F1E6}-\u{1F1FF}]{2}|\u{1F3F4}[\u{E0061}-\u{E007A}]{2,}\u{E007F}|[\u{1F30D}-\u{1F30F}])\s*/u, '')
+        .trim();
+    const dashIndex = withoutEmoji.indexOf('-');
+    if (dashIndex <= 0 || dashIndex >= withoutEmoji.length - 1) return null;
+    const prefix = withoutEmoji.slice(0, dashIndex).trim();
+    if (!prefix || prefix.length > 24) return null;
+    return prefix;
+}
+
+function injectDynamicSourceAndRegionSelectGroups(model) {
+    const hasSourcePlaceholder = model.groups.some(
+        g => Array.isArray(g.members) && g.members.includes('<%sourceStrategyChain%>')
+    );
+    const hasRegionSelectPlaceholder = model.groups.some(
+        g => Array.isArray(g.members) && g.members.includes('<%regionSelectChain%>')
+    );
+
+    const injectedSourceGroupNames = [];
+    const injectedRegionSelectGroupNames = [];
+
+    if (hasSourcePlaceholder && model.proxies.length > 0) {
+        const sourceMap = new Map();
+        model.proxies.forEach(proxy => {
+            const pName = proxy.name || proxy.tag;
+            if (!pName) return;
+            const src = extractSourcePrefixFromProxyName(pName);
+            if (!src) return;
+            if (!sourceMap.has(src)) sourceMap.set(src, []);
+            sourceMap.get(src).push(pName);
+        });
+
+        // 确保「自建」排在最前面，其余按订阅顺序排列
+        const sortedSources = Array.from(sourceMap.keys()).sort((a, b) => {
+            if (a === '自建') return -1;
+            if (b === '自建') return 1;
+            return 0;
+        });
+
+        sortedSources.forEach(src => {
+            const groupName = src === '自建' ? '🏠 自建' : `📦 ${src}`;
+            injectedSourceGroupNames.push(groupName);
+            model.groups.push({
+                name: groupName,
+                type: 'select',
+                members: sourceMap.get(src),
+                filters: [],
+                options: {}
+            });
+        });
+    }
+
+    if (hasRegionSelectPlaceholder && model.proxies.length > 0) {
+        const nodeEntries = model.proxies
+            .filter(p => p && (p.name || p.tag))
+            .map(p => ({ tag: p.name || p.tag, metadata: p.metadata }));
+        const regions = groupNodeLinesByRegion(nodeEntries);
+
+        regions.sort((a, b) => {
+            const cleanA = a.name.replace(/^[^\u4e00-\u9fa5]+/, '').replace(/节点$/, '').replace('狮城', '新加坡');
+            const cleanB = b.name.replace(/^[^\u4e00-\u9fa5]+/, '').replace(/节点$/, '').replace('狮城', '新加坡');
+            if (cleanA === '其他') return 1;
+            if (cleanB === '其他') return -1;
+            const idxA = REGION_PRIORITY_ORDER.indexOf(cleanA);
+            const idxB = REGION_PRIORITY_ORDER.indexOf(cleanB);
+            if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+            if (idxA !== -1) return -1;
+            if (idxB !== -1) return 1;
+            return cleanA.localeCompare(cleanB, 'zh-CN');
+        });
+
+        regions.forEach(region => {
+            const cleanLabel = region.name
+                .replace(/节点$/, '')
+                .replace('狮城', '新加坡')
+                .trim();
+            injectedRegionSelectGroupNames.push(cleanLabel);
+            model.groups.push({
+                name: cleanLabel,
+                type: 'select',
+                members: region.tags,
+                filters: [],
+                options: {}
+            });
+        });
+    }
+
+    return { injectedSourceGroupNames, injectedRegionSelectGroupNames };
+}
+
 /**
- * 展开魔法占位符（如 <%regionStrategyChain%>）
+ * 展开魔法占位符（如 <%regionStrategyChain%> / <%sourceStrategyChain%> / <%regionSelectChain%>）
  * @param {Object} model - 统一模板模型
  */
-function expandMagicPlaceholders(model) {
+function expandMagicPlaceholders(model, dynamicChains = {}) {
+    const { injectedSourceGroupNames = [], injectedRegionSelectGroupNames = [] } = dynamicChains;
     const regionNames = Array.from(new Set(
         model.groups
             .filter(g => g.type === 'url-test' && !g.name.includes('自动'))
@@ -159,7 +255,11 @@ function expandMagicPlaceholders(model) {
 
         const newMembers = [];
         group.members.forEach(member => {
-            if (member === '<%regionStrategyChain%>') {
+            if (member === '<%sourceStrategyChain%>') {
+                newMembers.push(...injectedSourceGroupNames);
+            } else if (member === '<%regionSelectChain%>') {
+                newMembers.push(...injectedRegionSelectGroupNames);
+            } else if (member === '<%regionStrategyChain%>') {
                 newMembers.push(...regionNames);
             } else if (member === '<%protocolStrategyChain%>') {
                 newMembers.push(...protocolNames);
@@ -200,10 +300,14 @@ export function applySmartModelOptimizations(model) {
     // 1. 执行现有的正则过滤器解析 (始终执行)
     resolveGroupFilters(model);
 
-    // 2. 检查等级。如果是 none (完全禁用)，我们只执行占位符展开和清理，不进行智能注入。
+    // 1.5 动态注入「按来源分组 (<%sourceStrategyChain%>)」与「按国家混合手动组 (<%regionSelectChain%>)」
+    const dynamicChains = injectDynamicSourceAndRegionSelectGroups(model);
+    const hasCustomRegionSelect = dynamicChains.injectedRegionSelectGroupNames.length > 0;
+
+    // 2. 检查等级。如果是 none (完全禁用) 或已显式启用 <%regionSelectChain%>，跳过默认 url-test 地区组注入
     const normalizedLevel = (ruleLevel || '').toLowerCase();
     
-    if (normalizedLevel !== 'none' && normalizedLevel !== 'base' && normalizedLevel) {
+    if (!hasCustomRegionSelect && normalizedLevel !== 'none' && normalizedLevel !== 'base' && normalizedLevel) {
         // 3. 准备获取所有节点的名称，用于后续注入
         const proxyNames = model.proxies.map(p => p.name || p.tag).filter(Boolean);
         if (proxyNames.length > 0) {
@@ -229,7 +333,7 @@ export function applySmartModelOptimizations(model) {
     }
 
     // 5. 展开魔法占位符 (始终执行，确保模板标签被替换)
-    expandMagicPlaceholders(model);
+    expandMagicPlaceholders(model, dynamicChains);
 
     // 6. 只有在非精简模式下才执行主选择器兜底注入
     if (normalizedLevel !== 'none' && normalizedLevel !== 'base' && normalizedLevel) {

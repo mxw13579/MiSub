@@ -68,14 +68,19 @@ export function groupNodeLinesByRegion(nodes = [], options = {}) {
             // 2. 使用预提取的元数据
             region = node.metadata.region;
         } else {
-            // 3. 回退到正则匹配逻辑
-            for (const { name: groupName, pattern } of REGION_GROUP_PATTERNS) {
-                if (pattern.test(tagName)) {
-                    // [核心修复] 增强提取能力：直接由预设名称提取中文核心地名，解决 split 导致的问题
-                    const match = groupName.match(/[\u4e00-\u9fa5]+/);
-                    region = match ? match[0].replace('节点', '') : '其他';
-                    break;
+            // 3. 回退到正则匹配逻辑（先剥离「来源-」前缀，避免机场名如「日文-香港」误命中「日」）
+            const withoutFlag = String(tagName || '').replace(/^[\u{1F1E6}-\u{1F1FF}]{2}\s*/u, '').trim();
+            const afterPrefix = withoutFlag.replace(/^[^-\s]+-(?=.+)/, '').trim();
+            const candidates = afterPrefix && afterPrefix !== withoutFlag ? [afterPrefix, tagName] : [tagName];
+            for (const candidate of candidates) {
+                for (const { name: groupName, pattern } of REGION_GROUP_PATTERNS) {
+                    if (pattern.test(candidate)) {
+                        const match = groupName.match(/[\u4e00-\u9fa5]+/);
+                        region = match ? match[0].replace('节点', '') : '其他';
+                        break;
+                    }
                 }
+                if (region !== '其他') break;
             }
         }
 

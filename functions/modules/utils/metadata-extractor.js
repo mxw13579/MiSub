@@ -36,8 +36,11 @@ export function extractNodeMetadata(name) {
     const flagMatches = name.match(EMOJI_FLAG_REGEX);
     const flag = flagMatches ? flagMatches[0] : '';
     
-    // 使用已有的 geo-utils 识别地区
-    const region = extractNodeRegion(name);
+    // 使用已有的 geo-utils 识别地区（优先跳过「来源前缀-」以防止如「日文-香港01」被前缀干扰）
+    const withoutFlag = name.replace(/^[\u{1F1E6}-\u{1F1FF}]{2}\s*/u, '').trim();
+    const afterSourcePrefix = withoutFlag.replace(/^[^-\s]+-(?=.+)/, '').trim();
+    const bodyRegion = afterSourcePrefix !== withoutFlag ? extractNodeRegion(afterSourcePrefix) : '其他';
+    const region = bodyRegion !== '其他' ? bodyRegion : extractNodeRegion(name);
     
     // 如果名称里没有国旗但识别出了地区，尝试根据地区补全国旗
     const autoFlag = flag || getRegionEmoji(region);

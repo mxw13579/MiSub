@@ -48,6 +48,30 @@ function updateSsrRemarks(link, updater) {
     }
 }
 
+function formatCompactPrefixedName(originalName, rawPrefix) {
+    const cleanPrefix = String(rawPrefix || '').trim().replace(/[\s-]+$/, '');
+    if (!cleanPrefix) return originalName;
+
+    const raw = String(originalName || '').trim();
+    if (!raw) return cleanPrefix;
+
+    // 提取前导国旗 Emoji，确保最终格式统一为「🇺🇸 前缀-节点名」而不是「前缀-🇺🇸 节点名」
+    const flagMatch = raw.match(/^((?:[\u{1F1E6}-\u{1F1FF}]{2}|\u{1F3F4}[\u{E0061}-\u{E007A}]{2,}\u{E007F})\s*)/u);
+    const leadingFlag = flagMatch ? flagMatch[1].trim() : '';
+    let body = flagMatch ? raw.slice(flagMatch[0].length).trim() : raw;
+
+    const escapedPrefix = cleanPrefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const existingPrefixRegex = new RegExp(`^${escapedPrefix}\\s*-\\s*`);
+    if (existingPrefixRegex.test(body)) {
+        body = body.replace(existingPrefixRegex, '');
+    } else if (body === cleanPrefix) {
+        return leadingFlag ? `${leadingFlag} ${cleanPrefix}` : cleanPrefix;
+    }
+
+    const combined = body ? `${cleanPrefix}-${body}` : cleanPrefix;
+    return leadingFlag ? `${leadingFlag} ${combined}` : combined;
+}
+
 /**
  * 为节点名称添加前缀
  */
@@ -55,10 +79,7 @@ export function prependNodeName(link, prefix) {
     if (!prefix) return link;
 
     if (link?.toLowerCase?.().startsWith('ssr://')) {
-        return updateSsrRemarks(link, (originalName) => {
-            if (originalName.startsWith(prefix)) return originalName;
-            return originalName ? `${prefix} - ${originalName}` : prefix;
-        });
+        return updateSsrRemarks(link, (originalName) => formatCompactPrefixedName(originalName, prefix));
     }
 
     const appendToFragment = (baseLink, namePrefix) => {
@@ -74,10 +95,10 @@ export function prependNodeName(link, prefix) {
             }
         }
         const base = hashIndex !== -1 ? baseLink.substring(0, hashIndex) : baseLink;
-        if (originalName.startsWith(namePrefix)) {
+        const newName = formatCompactPrefixedName(originalName, namePrefix);
+        if (newName === originalName && hashIndex !== -1) {
             return baseLink;
         }
-        const newName = originalName ? `${namePrefix} - ${originalName}` : namePrefix;
         return `${base}#${encodeURIComponent(newName)}`;
     };
 
@@ -92,9 +113,7 @@ export function prependNodeName(link, prefix) {
             const jsonString = new TextDecoder('utf-8').decode(bytes);
             const nodeConfig = JSON.parse(jsonString);
             const originalPs = nodeConfig.ps || '';
-            if (!originalPs.startsWith(prefix)) {
-                nodeConfig.ps = originalPs ? `${prefix} - ${originalPs}` : prefix;
-            }
+            nodeConfig.ps = formatCompactPrefixedName(originalPs, prefix);
             const newJsonString = JSON.stringify(nodeConfig);
             const newBase64Part = btoa(unescape(encodeURIComponent(newJsonString)));
             return 'vmess://' + newBase64Part;
