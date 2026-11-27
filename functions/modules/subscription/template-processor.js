@@ -22,7 +22,9 @@ function resolveGroupFilters(model) {
 
             try {
                 const regex = new RegExp(filter, 'i');
+                const isAutoGroup = ['url-test', 'fallback', 'load-balance'].includes(String(group.type || '').toLowerCase());
                 proxyNames.forEach(name => {
+                    if (isAutoGroup && isInfoAnnouncementNode(name)) return;
                     if (regex.test(name)) {
                         currentMembers.add(name);
                     }
@@ -140,6 +142,12 @@ const REGION_PRIORITY_ORDER = [
     '香港', '台湾', '日本', '新加坡', '美国', '韩国', '英国', '德国', '法国', '加拿大', '澳大利亚', '荷兰', '俄罗斯', '印度', '土耳其'
 ];
 
+const INFO_NODE_FILTER_REGEX = /(剩余流量|距离下次重置|套餐到期|到期时间|官网|防失联|售后|没事不要连|更新订阅|流量剩余|过期时间)/i;
+
+function isInfoAnnouncementNode(name = '') {
+    return INFO_NODE_FILTER_REGEX.test(String(name || ''));
+}
+
 function extractSourcePrefixFromProxyName(name = '') {
     const withoutEmoji = String(name || '')
         .replace(/^(?:[\u{1F1E6}-\u{1F1FF}]{2}|\u{1F3F4}[\u{E0061}-\u{E007A}]{2,}\u{E007F}|[\u{1F30D}-\u{1F30F}])\s*/u, '')
@@ -195,7 +203,7 @@ function injectDynamicSourceAndRegionSelectGroups(model) {
 
     if (hasRegionSelectPlaceholder && model.proxies.length > 0) {
         const nodeEntries = model.proxies
-            .filter(p => p && (p.name || p.tag))
+            .filter(p => p && (p.name || p.tag) && !isInfoAnnouncementNode(p.name || p.tag))
             .map(p => ({ tag: p.name || p.tag, metadata: p.metadata }));
         const regions = groupNodeLinesByRegion(nodeEntries);
 

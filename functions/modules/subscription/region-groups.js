@@ -1,9 +1,12 @@
+import { getRegionEmoji } from '../utils/geo-utils.js';
+
 // 地区展示配置：包含 Emoji 和标准中文名称
 const REGION_DISPLAY_CONFIG = {
     '香港': { flag: '🇭🇰', name: '香港节点' },
     '台湾': { flag: '🇹🇼', name: '台湾节点' },
     '日本': { flag: '🇯🇵', name: '日本节点' },
-    '新加坡': { flag: '🇸🇬', name: '狮城节点' },
+    '新加坡': { flag: '🇸🇬', name: '新加坡节点' },
+    '狮城': { flag: '🇸🇬', name: '新加坡节点' },
     '美国': { flag: '🇺🇸', name: '美国节点' },
     '韩国': { flag: '🇰🇷', name: '韩国节点' },
     '英国': { flag: '🇬🇧', name: '英国节点' },
@@ -88,8 +91,10 @@ export function groupNodeLinesByRegion(nodes = [], options = {}) {
             region = '其他';
         }
 
-        // 4. 构造标准的展示组名
-        const config = REGION_DISPLAY_CONFIG[region] || { flag: '🌍', name: `${region}节点` };
+        // 4. 构造标准的展示组名（优先使用真实国旗 Emoji，统一「新加坡」与「狮城」）
+        const normalizedRegion = region === '狮城' ? '新加坡' : region;
+        const dynamicFlag = getRegionEmoji(normalizedRegion);
+        const config = REGION_DISPLAY_CONFIG[normalizedRegion] || { flag: dynamicFlag || '🌍', name: `${normalizedRegion}节点` };
         const groupName = `${config.flag} ${config.name}`;
 
         if (!groups.has(groupName)) {

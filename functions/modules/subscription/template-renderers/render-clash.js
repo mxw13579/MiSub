@@ -183,7 +183,6 @@ export function renderClashFromTemplateModel(model) {
         'unified-delay': true,
         'tcp-concurrent': true,
         'find-process-mode': 'strict',
-        'global-client-fingerprint': 'chrome',
         'external-controller': ':9090',
         'sniffer': {
             'enable': true,
