@@ -78,6 +78,7 @@ prependGroupName: false
     nodeStability: {
         enabled: true,
         enableGroupAutoFastest: true,
+        hideInfoNodes: true,
         defaultMaxLatencyMs: 800,
         failStrikeThreshold: 3,
         recoveryCooldownHours: 24,

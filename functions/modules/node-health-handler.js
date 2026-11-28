@@ -5,7 +5,7 @@ import { authMiddleware } from './auth-middleware.js';
 import { extractNodeMetadata } from './utils/metadata-extractor.js';
 import { clearAllNodeCaches } from '../services/node-cache-service.js';
 
-const INFO_NODE_REGEX = /(剩余流量|距离下次重置|套餐到期|到期时间|官网|防失联|售后|没事不要连|更新订阅|流量剩余|过期时间)/i;
+const INFO_NODE_REGEX = /(剩余流量|流量剩余|距离下次重置|下次重置|套餐到期|到期时间|过期时间|有效期|官网|发布页|防失联|失联|售后|客服|电报群|TG群|没事不要连|更新订阅|订阅专用|全红|https?:\/\/)/i;
 
 export function normalizeNodeHealthKey(rawName = '') {
     return String(rawName || '')
@@ -57,6 +57,7 @@ export function normalizeStabilityConfig(raw = {}) {
     return {
         enabled: src.enabled !== false,
         enableGroupAutoFastest: src.enableGroupAutoFastest !== false,
+        hideInfoNodes: src.hideInfoNodes !== false,
         defaultMaxLatencyMs: Math.max(100, Math.min(10000, Number(src.defaultMaxLatencyMs) || defaults.defaultMaxLatencyMs)),
         failStrikeThreshold: Math.max(1, Math.min(20, Number(src.failStrikeThreshold) || defaults.failStrikeThreshold)),
         recoveryCooldownHours: Math.max(1, Math.min(720, Number(src.recoveryCooldownHours) || defaults.recoveryCooldownHours)),
@@ -312,22 +313,25 @@ export async function filterQuarantinedNodeLines(combinedNodeList, storageAdapte
     if (!combinedNodeList || typeof combinedNodeList !== 'string') return combinedNodeList;
 
     const stability = normalizeStabilityConfig(config?.nodeStability);
-    if (!stability.enabled) return combinedNodeList;
-
     const includeDeadMode = searchParams?.get('include_dead');
     if (includeDeadMode === 'all' || includeDeadMode === '1') {
         return combinedNodeList;
     }
 
-    let store;
-    try {
-        store = await readHealthStore(storageAdapter);
-    } catch {
-        return combinedNodeList;
+    if (!stability.enabled && !stability.hideInfoNodes) return combinedNodeList;
+
+    let nodeMap = null;
+    if (stability.enabled) {
+        try {
+            const store = await readHealthStore(storageAdapter);
+            nodeMap = store?.nodes || null;
+        } catch {
+            nodeMap = null;
+        }
     }
 
-    const nodeMap = store?.nodes;
-    if (!nodeMap || Object.keys(nodeMap).length === 0) return combinedNodeList;
+    const hasQuarantineMap = Boolean(nodeMap && Object.keys(nodeMap).length > 0);
+    if (!hasQuarantineMap && !stability.hideInfoNodes) return combinedNodeList;
 
     const includeDueForRecovery = includeDeadMode === 'recovery';
     const cooldownMs = stability.recoveryCooldownHours * 3600 * 1000;
@@ -341,7 +345,19 @@ export async function filterQuarantinedNodeLines(combinedNodeList, storageAdapte
         if (!trimmed) continue;
 
         const nodeName = extractNodeNameFromLine(trimmed);
-        if (!nodeName || INFO_NODE_REGEX.test(nodeName)) {
+        if (!nodeName) {
+            kept.push(line);
+            continue;
+        }
+
+        if (INFO_NODE_REGEX.test(nodeName)) {
+            if (!stability.hideInfoNodes) {
+                kept.push(line);
+            }
+            continue;
+        }
+
+        if (!hasQuarantineMap) {
             kept.push(line);
             continue;
         }

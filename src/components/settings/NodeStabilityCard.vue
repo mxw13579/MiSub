@@ -30,6 +30,7 @@ function ensureNodeStabilityDefaults() {
     props.settings.nodeStability = {
       enabled: true,
       enableGroupAutoFastest: true,
+      hideInfoNodes: true,
       defaultMaxLatencyMs: 800,
       failStrikeThreshold: 3,
       recoveryCooldownHours: 24,
@@ -41,6 +42,7 @@ function ensureNodeStabilityDefaults() {
   const s = props.settings.nodeStability;
   if (s.enabled === undefined) s.enabled = true;
   if (s.enableGroupAutoFastest === undefined) s.enableGroupAutoFastest = true;
+  if (s.hideInfoNodes === undefined) s.hideInfoNodes = true;
   if (!s.defaultMaxLatencyMs) s.defaultMaxLatencyMs = 800;
   if (!s.failStrikeThreshold) s.failStrikeThreshold = 3;
   if (!s.recoveryCooldownHours) s.recoveryCooldownHours = 24;
@@ -164,7 +166,7 @@ onMounted(() => {
     </div>
 
     <!-- 核心开关 -->
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
       <label class="flex items-center justify-between rounded-lg border border-gray-100 bg-gray-50/70 px-4 py-3 cursor-pointer dark:border-gray-700 dark:bg-gray-800/50">
         <div>
           <div class="text-sm font-medium text-gray-900 dark:text-white">启用动态失联 / 高延迟剔除</div>
@@ -179,6 +181,14 @@ onMounted(() => {
           <div class="text-xs text-gray-500 dark:text-gray-400">在每个来源组与国家组第 1 项置顶隐藏测速组，实时无缝避障</div>
         </div>
         <input type="checkbox" v-model="settings.nodeStability.enableGroupAutoFastest" class="h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500" />
+      </label>
+
+      <label class="flex items-center justify-between rounded-lg border border-gray-100 bg-gray-50/70 px-4 py-3 cursor-pointer dark:border-gray-700 dark:bg-gray-800/50">
+        <div>
+          <div class="text-sm font-medium text-gray-900 dark:text-white">屏蔽流量 / 到期 / 官网公告伪节点</div>
+          <div class="text-xs text-gray-500 dark:text-gray-400">自动剔除机场下发的剩余流量、到期时间、官网地址、防失联等提示条目</div>
+        </div>
+        <input type="checkbox" v-model="settings.nodeStability.hideInfoNodes" class="h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500" />
       </label>
     </div>
 

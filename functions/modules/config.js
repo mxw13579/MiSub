@@ -53,6 +53,7 @@ export const DEFAULT_SETTINGS = {
     nodeStability: {
         enabled: true,
         enableGroupAutoFastest: true,
+        hideInfoNodes: true,
         defaultMaxLatencyMs: 800,
         failStrikeThreshold: 3,
         recoveryCooldownHours: 24,
