@@ -174,6 +174,22 @@ export function renderClashFromTemplateModel(model) {
         };
     });
 
+    const domesticDns = [
+        'https://dns.alidns.com/dns-query',
+        'https://doh.pub/dns-query',
+        '223.5.5.5',
+        '119.29.29.29'
+    ];
+    const remoteDoH = primaryProxyGroup
+        ? [
+            `https://1.1.1.1/dns-query#${primaryProxyGroup}`,
+            `https://8.8.8.8/dns-query#${primaryProxyGroup}`
+        ]
+        : [
+            'https://dns.alidns.com/dns-query',
+            'https://doh.pub/dns-query'
+        ];
+
     const config = {
         'mixed-port': 7890,
         'allow-lan': true,
@@ -184,6 +200,15 @@ export function renderClashFromTemplateModel(model) {
         'tcp-concurrent': true,
         'find-process-mode': 'strict',
         'external-controller': ':9090',
+        'geodata-mode': true,
+        'geodata-loader': 'memconservative',
+        'geo-auto-update': true,
+        'geo-update-interval': 168,
+        'geox-url': {
+            'geoip': 'https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geoip.dat',
+            'geosite': 'https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geosite.dat',
+            'mmdb': 'https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/country.mmdb'
+        },
         'sniffer': {
             'enable': true,
             'parse-pure-ip': true,
@@ -208,25 +233,39 @@ export function renderClashFromTemplateModel(model) {
                 '+.oray.net'
             ]
         },
+        'hosts': {
+            'stun.l.google.com': '0.0.0.0',
+            'stun1.l.google.com': '0.0.0.0',
+            'stun2.l.google.com': '0.0.0.0',
+            'stun3.l.google.com': '0.0.0.0',
+            'stun4.l.google.com': '0.0.0.0',
+            'stun.cloudflare.com': '0.0.0.0',
+            'global.stun.twilio.com': '0.0.0.0'
+        },
         'dns': {
             'enable': true,
             'ipv6': false,
-            'listen': '0.0.0.0:1053',
+            'respect-rules': true,
             'default-nameserver': ['223.5.5.5', '119.29.29.29'],
-            'proxy-server-nameserver': [
-                'https://dns.alidns.com/dns-query',
-                'https://doh.pub/dns-query'
-            ],
+            'proxy-server-nameserver': domesticDns,
+            'direct-nameserver': domesticDns,
+            'nameserver-policy': {
+                'geosite:cn,private': domesticDns
+            },
             'enhanced-mode': 'fake-ip',
             'fake-ip-range': '198.18.0.1/16',
             'fake-ip-filter': [
                 '*.lan',
                 '*.local',
                 '*.localhost',
+                '*.arpa',
                 '+.msftconnecttest.com',
                 '+.msftncsi.com',
+                '*.msftncsi.com',
+                'www.msftconnecttest.com',
                 'localhost.ptlogin2.qq.com',
                 'localhost.sec.qq.com',
+                '+.market.xiaomi.com',
                 '+.oray.com',
                 '+.oray.net',
                 '+.srv.nintendo.net',
@@ -234,17 +273,13 @@ export function renderClashFromTemplateModel(model) {
                 'xbox.*.microsoft.com',
                 '+.xboxlive.com',
                 '+.battlenet.com.cn',
-                'stun.*.*',
-                'stun.*.*.*',
+                'time.windows.com',
                 'time.*.com',
                 'time.*.gov',
                 'time.*.apple.com',
                 'ntp.*.com'
             ],
-            'nameserver': [
-                'https://dns.alidns.com/dns-query',
-                'https://doh.pub/dns-query'
-            ]
+            'nameserver': remoteDoH
         },
         'proxies': normalizedModel.proxies,
         'proxy-groups': normalizedModel.groups
@@ -273,6 +308,7 @@ export function renderClashFromTemplateModel(model) {
         }).filter(Boolean),
         'profile': {
             'store-selected': true,
+            'store-fake-ip': true,
             'subscription-url': normalizedModel.settings.managedConfigUrl || ''
         }
     };

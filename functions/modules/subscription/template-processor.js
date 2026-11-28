@@ -142,7 +142,13 @@ const REGION_PRIORITY_ORDER = [
     '香港', '台湾', '日本', '新加坡', '美国', '韩国', '英国', '德国', '法国', '加拿大', '澳大利亚', '荷兰', '俄罗斯', '印度', '土耳其'
 ];
 
-const INFO_NODE_FILTER_REGEX = /(剩余流量|距离下次重置|套餐到期|到期时间|官网|防失联|售后|没事不要连|更新订阅|流量剩余|过期时间)/i;
+// 核心常驻独立分组地区（即使只剩 1~2 个节点也独立成组）；非核心冷门小国若节点数 <= 2 自动归并至「🌏 其他地区」
+const CORE_STANDALONE_REGIONS = new Set([
+    '香港', '台湾', '日本', '新加坡', '美国', '韩国', '英国', '德国'
+]);
+const MINOR_REGION_MERGE_MAX_NODES = 2;
+
+const INFO_NODE_FILTER_REGEX = /(剩余流量|流量剩余|距离下次重置|下次重置|套餐到期|到期时间|过期时间|有效期|官网|发布页|防失联|失联|售后|客服|电报群|TG群|没事不要连|更新订阅|订阅专用|全红|https?:\/\/)/i;
 
 function isInfoAnnouncementNode(name = '') {
     return INFO_NODE_FILTER_REGEX.test(String(name || ''));
@@ -188,12 +194,16 @@ function injectDynamicSourceAndRegionSelectGroups(model) {
     const hasRegionSelectPlaceholder = model.groups.some(
         g => Array.isArray(g.members) && g.members.includes('<%regionSelectChain%>')
     );
+    const hasRegionAutoPlaceholder = model.groups.some(
+        g => Array.isArray(g.members) && g.members.includes('<%regionAutoChain%>')
+    );
 
     const isClashTarget = String(model.meta?.target || 'clash').toLowerCase() === 'clash';
     const enableAutoFastest = isClashTarget && model.settings?.enableGroupAutoFastest !== false;
 
     const injectedSourceGroupNames = [];
     const injectedRegionSelectGroupNames = [];
+    const injectedRegionAutoTargets = [];
     const hiddenHelperGroups = [];
 
     if (hasSourcePlaceholder && model.proxies.length > 0) {
@@ -231,7 +241,7 @@ function injectDynamicSourceAndRegionSelectGroups(model) {
         });
     }
 
-    if (hasRegionSelectPlaceholder && model.proxies.length > 0) {
+    if ((hasRegionSelectPlaceholder || hasRegionAutoPlaceholder) && model.proxies.length > 0) {
         const nodeEntries = model.proxies
             .filter(p => p && (p.name || p.tag) && !isInfoAnnouncementNode(p.name || p.tag))
             .map(p => ({ tag: p.name || p.tag, metadata: p.metadata }));
@@ -250,23 +260,53 @@ function injectDynamicSourceAndRegionSelectGroups(model) {
             return cleanA.localeCompare(cleanB, 'zh-CN');
         });
 
+        const standaloneRegions = [];
+        const mergedOtherTags = [];
+
         regions.forEach(region => {
             const cleanLabel = region.name
                 .replace(/节点$/, '')
                 .replace('狮城', '新加坡')
                 .trim();
             const shortRegion = cleanLabel.replace(/^[^\u4e00-\u9fa5A-Za-z0-9]+/, '').trim() || cleanLabel;
-            const helper = buildHiddenAutoHelperGroup(shortRegion, region.tags, enableAutoFastest);
-            if (helper) hiddenHelperGroups.push(helper);
+            const normalizedShort = shortRegion === '澳洲' ? '澳大利亚' : shortRegion;
+            const isCore = CORE_STANDALONE_REGIONS.has(shortRegion) || CORE_STANDALONE_REGIONS.has(normalizedShort);
 
-            injectedRegionSelectGroupNames.push(cleanLabel);
-            model.groups.push({
-                name: cleanLabel,
-                type: 'select',
-                members: helper ? [helper.name, ...region.tags] : region.tags,
-                filters: [],
-                options: {}
+            if (shortRegion === '其他' || (!isCore && region.tags.length <= MINOR_REGION_MERGE_MAX_NODES)) {
+                mergedOtherTags.push(...region.tags);
+            } else {
+                standaloneRegions.push({ cleanLabel, shortRegion, tags: region.tags });
+            }
+        });
+
+        if (mergedOtherTags.length > 0) {
+            standaloneRegions.push({
+                cleanLabel: '🌏 冷门地区',
+                shortRegion: '冷门地区',
+                tags: mergedOtherTags
             });
+        }
+
+        standaloneRegions.forEach(({ cleanLabel, shortRegion, tags }) => {
+            const helper = buildHiddenAutoHelperGroup(shortRegion, tags, enableAutoFastest);
+            if (helper) {
+                hiddenHelperGroups.push(helper);
+                injectedRegionAutoTargets.push(helper.name);
+            } else {
+                const nonIpv6 = tags.find(n => !/[iI][pP][vV]6/.test(n));
+                if (nonIpv6) injectedRegionAutoTargets.push(nonIpv6);
+            }
+
+            if (hasRegionSelectPlaceholder) {
+                injectedRegionSelectGroupNames.push(cleanLabel);
+                model.groups.push({
+                    name: cleanLabel,
+                    type: 'select',
+                    members: helper ? [helper.name, ...tags] : tags,
+                    filters: [],
+                    options: {}
+                });
+            }
         });
     }
 
@@ -274,15 +314,19 @@ function injectDynamicSourceAndRegionSelectGroups(model) {
         model.groups.push(...hiddenHelperGroups);
     }
 
-    return { injectedSourceGroupNames, injectedRegionSelectGroupNames };
+    return { injectedSourceGroupNames, injectedRegionSelectGroupNames, injectedRegionAutoTargets };
 }
 
 /**
- * 展开魔法占位符（如 <%regionStrategyChain%> / <%sourceStrategyChain%> / <%regionSelectChain%>）
+ * 展开魔法占位符（如 <%regionStrategyChain%> / <%sourceStrategyChain%> / <%regionSelectChain%> / <%regionAutoChain%>）
  * @param {Object} model - 统一模板模型
  */
 function expandMagicPlaceholders(model, dynamicChains = {}) {
-    const { injectedSourceGroupNames = [], injectedRegionSelectGroupNames = [] } = dynamicChains;
+    const {
+        injectedSourceGroupNames = [],
+        injectedRegionSelectGroupNames = [],
+        injectedRegionAutoTargets = []
+    } = dynamicChains;
     const regionNames = Array.from(new Set(
         model.groups
             .filter(g => g.type === 'url-test' && !g.name.includes('自动'))
@@ -305,6 +349,8 @@ function expandMagicPlaceholders(model, dynamicChains = {}) {
                 newMembers.push(...injectedSourceGroupNames);
             } else if (member === '<%regionSelectChain%>') {
                 newMembers.push(...injectedRegionSelectGroupNames);
+            } else if (member === '<%regionAutoChain%>') {
+                newMembers.push(...injectedRegionAutoTargets);
             } else if (member === '<%regionStrategyChain%>') {
                 newMembers.push(...regionNames);
             } else if (member === '<%protocolStrategyChain%>') {

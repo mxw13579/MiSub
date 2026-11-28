@@ -37,10 +37,12 @@ export function extractNodeMetadata(name) {
     const flag = flagMatches ? flagMatches[0] : '';
     
     // 使用已有的 geo-utils 识别地区（优先跳过「来源前缀-」以防止如「日文-香港01」被前缀干扰）
-    const withoutFlag = name.replace(/^[\u{1F1E6}-\u{1F1FF}]{2}\s*/u, '').trim();
+    const withoutFlag = name
+        .replace(/^(?:[\u{1F1E6}-\u{1F1FF}]{2}|\u{1F3F4}[\u{E0061}-\u{E007A}]{2,}\u{E007F}|[\u{1F30D}-\u{1F30F}])\s*/u, '')
+        .trim();
     const afterSourcePrefix = withoutFlag.replace(/^[^-\s]+-(?=.+)/, '').trim();
     const bodyRegion = afterSourcePrefix !== withoutFlag ? extractNodeRegion(afterSourcePrefix) : '其他';
-    const region = bodyRegion !== '其他' ? bodyRegion : extractNodeRegion(name);
+    const region = bodyRegion !== '其他' ? bodyRegion : extractNodeRegion(afterSourcePrefix || name);
     
     // 如果名称里没有国旗但识别出了地区，尝试根据地区补全国旗
     const autoFlag = flag || getRegionEmoji(region);

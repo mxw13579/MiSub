@@ -9,6 +9,7 @@
  */
 export const REGION_KEYWORDS = {
     '香港': ['HK', 'HKG', 'HKT', '香港', 'Hong Kong', 'HongKong'],
+    '澳门': ['MO', 'MAC', 'MFM', '澳门', 'Macau', 'Macao'],
     '台湾': ['TW', 'TPE', '台湾', '台北', 'Taiwan', 'Taipei'],
     '新加坡': ['SG', 'SIN', '新加坡', 'Singapore'],
     '日本': ['JP', 'JPN', 'NRT', 'HND', 'KIX', 'FUK', '东京', '大阪', '日本', 'Japan', 'Tokyo', 'Osaka', 'Fukuoka', 'Yokohama'],
@@ -96,6 +97,7 @@ export const REGION_KEYWORDS = {
  */
 export const REGION_EMOJI = {
     '香港': '🇭🇰',
+    '澳门': '🇲🇴',
     '台湾': '🇨🇳',
     '新加坡': '🇸🇬',
     '日本': '🇯🇵',

@@ -3,6 +3,7 @@ import { getRegionEmoji } from '../utils/geo-utils.js';
 // 地区展示配置：包含 Emoji 和标准中文名称
 const REGION_DISPLAY_CONFIG = {
     '香港': { flag: '🇭🇰', name: '香港节点' },
+    '澳门': { flag: '🇲🇴', name: '澳门节点' },
     '台湾': { flag: '🇹🇼', name: '台湾节点' },
     '日本': { flag: '🇯🇵', name: '日本节点' },
     '新加坡': { flag: '🇸🇬', name: '新加坡节点' },
@@ -24,6 +25,7 @@ const REGION_DISPLAY_CONFIG = {
 
 export const REGION_GROUP_PATTERNS = [
     { name: '🇭🇰 香港节点', pattern: /港|HK|Hong Kong/i },
+    { name: '🇲🇴 澳门节点', pattern: /澳门|MO|Macau|Macao/i },
     { name: '🇹🇼 台湾节点', pattern: /台|TW|Taiwan/i },
     { name: '🇯🇵 日本节点', pattern: /日|JP|Japan/i },
     { name: '🇸🇬 狮城节点', pattern: /狮城|新|SG|Singapore/i },
@@ -71,10 +73,12 @@ export function groupNodeLinesByRegion(nodes = [], options = {}) {
             // 2. 使用预提取的元数据
             region = node.metadata.region;
         } else {
-            // 3. 回退到正则匹配逻辑（先剥离「来源-」前缀，避免机场名如「日文-香港」误命中「日」）
-            const withoutFlag = String(tagName || '').replace(/^[\u{1F1E6}-\u{1F1FF}]{2}\s*/u, '').trim();
+            // 3. 回退到正则匹配逻辑（先剥离「来源-」前缀与地球/旗帜符号，避免机场名如「🌍 日文-澳门1」误命中「日」）
+            const withoutFlag = String(tagName || '')
+                .replace(/^(?:[\u{1F1E6}-\u{1F1FF}]{2}|\u{1F3F4}[\u{E0061}-\u{E007A}]{2,}\u{E007F}|[\u{1F30D}-\u{1F30F}])\s*/u, '')
+                .trim();
             const afterPrefix = withoutFlag.replace(/^[^-\s]+-(?=.+)/, '').trim();
-            const candidates = afterPrefix && afterPrefix !== withoutFlag ? [afterPrefix, tagName] : [tagName];
+            const candidates = afterPrefix && afterPrefix !== withoutFlag ? [afterPrefix] : [tagName];
             for (const candidate of candidates) {
                 for (const { name: groupName, pattern } of REGION_GROUP_PATTERNS) {
                     if (pattern.test(candidate)) {
